@@ -1,16 +1,16 @@
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
+import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestTemplate;
 
 @SpringBootApplication
+@EnableScheduling
 public class Application {
 
     public static void main(String[] args) {
@@ -35,28 +35,29 @@ class HealthController {
     }
 }
 
-@Configuration
-class HealthCheckerConfiguration {
+@Component
+class HealthChecker {
+
+    private final RestTemplate restTemplate;
 
     private static final String HEALTH_ENDPOINT = "http://localhost:8080/actuator/health";
+
+    public HealthChecker(RestTemplateBuilder restTemplateBuilder) {
+        this.restTemplate = restTemplateBuilder.build();
+    }
+
+    @Scheduled(fixedRate = 10000)
+    public void checkHealth() {
+        String health = restTemplate.getForObject(HEALTH_ENDPOINT, String.class);
+        System.out.println("Application health: " + health);
+    }
+}
+
+@Configuration
+class RestTemplateConfiguration {
 
     @Bean
     public RestTemplate restTemplate(RestTemplateBuilder builder) {
         return builder.build();
-    }
-
-    @Bean
-    public ScheduledExecutorService executorService() {
-        ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
-
-        RestTemplate restTemplate = new RestTemplateBuilder().build();
-
-        Runnable task = () -> {
-            String health = restTemplate.getForObject(HEALTH_ENDPOINT, String.class);
-            System.out.println("Application health: " + health);
-        };
-
-        executor.scheduleAtFixedRate(task, 0, 10, TimeUnit.SECONDS);
-        return executor;
     }
 }
