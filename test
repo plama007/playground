@@ -1,40 +1,62 @@
-package com.example.demo;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.actuate.health.Health;
-import org.springframework.boot.actuate.health.HealthIndicator;
-import org.springframework.boot.actuate.health.Status;
-import org.springframework.http.ResponseEntity;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.context.annotation.Bean;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.RestTemplate;
 
-import java.util.HashMap;
-import java.util.Map;
+@SpringBootApplication
+public class Application {
 
-@Component
+    public static void main(String[] args) {
+        SpringApplication.run(Application.class, args);
+    }
+}
+
 @RestController
-public class HealthCheckScheduler {
+class HealthController {
 
-    @Autowired
-    @Qualifier("dbHealthIndicator")
-    private HealthIndicator dbHealthIndicator;
+    private final RestTemplate restTemplate;
 
-    @Scheduled(fixedRate = 10000) // check health every 10 seconds
-    public void checkHealth() {
-        Health dbHealth = dbHealthIndicator.health();
-        System.out.println("Database health: " + dbHealth.getStatus());
+    private static final String HEALTH_ENDPOINT = "http://localhost:8080/actuator/health";
+
+    public HealthController(RestTemplateBuilder restTemplateBuilder) {
+        this.restTemplate = restTemplateBuilder.build();
     }
 
-    @GetMapping("/health")
-    public ResponseEntity<Map<String, Object>> getHealth() {
-        Map<String, Object> health = new HashMap<>();
+    @GetMapping("/health-status")
+    public String healthStatus() {
+        return restTemplate.getForObject(HEALTH_ENDPOINT, String.class);
+    }
+}
 
-        Health dbHealth = dbHealthIndicator.health();
-        health.put("database", dbHealth.getStatus().toString());
+@Configuration
+class HealthCheckerConfiguration {
 
-        return ResponseEntity.ok(health);
+    private static final String HEALTH_ENDPOINT = "http://localhost:8080/actuator/health";
+
+    @Bean
+    public RestTemplate restTemplate(RestTemplateBuilder builder) {
+        return builder.build();
+    }
+
+    @Bean
+    public ScheduledExecutorService executorService() {
+        ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+
+        RestTemplate restTemplate = new RestTemplateBuilder().build();
+
+        Runnable task = () -> {
+            String health = restTemplate.getForObject(HEALTH_ENDPOINT, String.class);
+            System.out.println("Application health: " + health);
+        };
+
+        executor.scheduleAtFixedRate(task, 0, 10, TimeUnit.SECONDS);
+        return executor;
     }
 }
