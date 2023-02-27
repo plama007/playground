@@ -1,50 +1,38 @@
-@Service
-public class HealthChecker {
+package com.example.demo;
 
-    private final RestTemplate restTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.actuate.health.Health;
+import org.springframework.boot.actuate.health.HealthIndicator;
+import org.springframework.boot.actuate.health.Status;
+import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
 
-    @Value("${healthCheck.url}")
-    private String healthCheckUrl;
+import java.util.HashMap;
+import java.util.Map;
 
-    public HealthChecker(RestTemplate restTemplate) {
-        this.restTemplate = restTemplate;
-    }
-
-    public HealthStatus checkHealth() {
-        try {
-            ResponseEntity<String> responseEntity = restTemplate.getForEntity(healthCheckUrl, String.class);
-            HttpStatus statusCode = responseEntity.getStatusCode();
-            String responseBody = responseEntity.getBody();
-            if (statusCode == HttpStatus.OK && responseBody != null) {
-                return new HealthStatus("UP");
-            } else {
-                return new HealthStatus("DOWN");
-            }
-        } catch (Exception e) {
-            return new HealthStatus("DOWN");
-        }
-    }
-}
-
-
-
+@Component
 @RestController
-@RequestMapping("/health")
-public class HealthController {
+public class HealthCheckScheduler {
 
-    private final HealthChecker healthChecker;
+    @Autowired
+    private HealthIndicator dbHealthIndicator;
 
-    public HealthController(HealthChecker healthChecker) {
-        this.healthChecker = healthChecker;
+    @Scheduled(fixedRate = 10000) // check health every 10 seconds
+    public void checkHealth() {
+        Health dbHealth = dbHealthIndicator.health();
+        System.out.println("Database health: " + dbHealth.getStatus());
     }
 
-    @GetMapping
-    public ResponseEntity<HealthStatus> getHealthStatus() {
-        HealthStatus healthStatus = healthChecker.checkHealth();
-        if (healthStatus.getStatus().equals("UP")) {
-            return ResponseEntity.ok(healthStatus);
-        } else {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(healthStatus);
-        }
+    @GetMapping("/health")
+    public ResponseEntity<Map<String, Object>> getHealth() {
+        Map<String, Object> health = new HashMap<>();
+
+        Health dbHealth = dbHealthIndicator.health();
+        health.put("database", dbHealth.getStatus().toString());
+
+        return ResponseEntity.ok(health);
     }
 }
