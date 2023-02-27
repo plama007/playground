@@ -1,6 +1,7 @@
 package com.example.demo;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.HealthIndicator;
 import org.springframework.boot.actuate.health.Status;
@@ -18,6 +19,7 @@ import java.util.Map;
 public class HealthCheckScheduler {
 
     @Autowired
+    @Qualifier("dbHealthIndicator")
     private HealthIndicator dbHealthIndicator;
 
     @Scheduled(fixedRate = 10000) // check health every 10 seconds
