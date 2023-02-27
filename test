@@ -1,22 +1,46 @@
-@RestController
-@RequestMapping("/api")
-public class HealthCheckController {
+@Component
+public class HealthChecker {
     
-    private final RestTemplate restTemplate;
+    @Autowired
+    private RestTemplate restTemplate;
+    
+    @Scheduled(fixedDelay = 10000)
+    public void checkHealth() {
+        String healthUrl = "http://localhost:8080/health";
+        try {
+            ResponseEntity<String> response = restTemplate.getForEntity(healthUrl, String.class);
+            if (response.getStatusCode() == HttpStatus.OK) {
+                System.out.println("Application is up and running!");
+            } else {
+                System.out.println("Application is not available!");
+            }
+        } catch (Exception ex) {
+            System.out.println("Application is down!");
+        }
+    }
+}
+
+
+
+package com.example.demo;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.io.IOException;
+import java.util.Map;
+
+@RestController
+public class HealthController {
 
     @Autowired
-    public HealthCheckController(RestTemplate restTemplate) {
-        this.restTemplate = restTemplate;
-    }
+    private HealthChecker healthChecker;
 
     @GetMapping("/health")
-    public ResponseEntity<String> checkHealth() {
-        String health = restTemplate.getForObject("/health", String.class);
+    public ResponseEntity<Map<String, Object>> getHealth() throws IOException {
+        Map<String, Object> health = healthChecker.checkHealth();
         return ResponseEntity.ok(health);
-    }
-    
-    @Scheduled(fixedRate = 10000) // execute every 10 seconds
-    public void scheduledHealthCheck() {
-        checkHealth();
     }
 }
