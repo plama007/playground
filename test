@@ -51,3 +51,23 @@ public class HealthControllerTest {
                .andExpect(MockMvcResultMatchers.content().json("{\"status\":\"UP\"}"));
     }
 }
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.boot.actuate.health.Health;
+import org.springframework.boot.actuate.health.HealthEndpoint;
+
+@RestController
+@RequestMapping("/api")
+public class HealthController {
+ 
+    @Autowired
+    private HealthEndpoint healthEndpoint;
+ 
+    @GetMapping("/health")
+    public Health getHealthStatus() {
+        return healthEndpoint.health();
+    }
+}
