@@ -1,1 +1,53 @@
-This is just test
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+}
+
+management.endpoint.health.show-details=always
+management.endpoints.web.exposure.include=health
+
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestTemplate;
+
+@Component
+public class HealthChecker {
+    private RestTemplate restTemplate = new RestTemplate();
+
+    @Scheduled(fixedDelay = 60000) // call the endpoint every minute
+    public void checkHealth() {
+        String result = restTemplate.getForObject("http://localhost:8080/actuator/health", String.class);
+        System.out.println(result);
+    }
+}
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
+
+@WebMvcTest
+@ExtendWith(SpringExtension.class)
+public class HealthControllerTest {
+ 
+    @Autowired
+    private MockMvc mockMvc;
+ 
+    @MockBean
+    private HealthService healthService;
+ 
+    @Test
+    public void testHealthEndpoint() throws Exception {
+        Mockito.when(healthService.getHealthStatus()).thenReturn("UP");
+ 
+        mockMvc.perform(MockMvcRequestBuilders.get("/actuator/health"))
+               .andExpect(MockMvcResultMatchers.status().isOk())
+               .andExpect(MockMvcResultMatchers.content().json("{\"status\":\"UP\"}"));
+    }
+}
