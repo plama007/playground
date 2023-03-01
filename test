@@ -1,22 +1,65 @@
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.actuate.health.Health;
-import org.springframework.boot.actuate.health.HealthEndpoint;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
-
 @Component
-public class MyComponent {
-    
+public class HealthChecker {
+    private static final Logger LOGGER = LoggerFactory.getLogger(HealthChecker.class);
+
     @Autowired
     private HealthEndpoint healthEndpoint;
 
-    @Scheduled(fixedRate = 60000)
+    @Scheduled(fixedDelay = 300000)
     public void logHealth() {
-        Health health = healthEndpoint.health();
-        // use your logging framework to log the health object
-        // for example, to log as JSON:
-        String healthJson = new ObjectMapper().writeValueAsString(health);
-        log.info("Application health: {}", healthJson);
+        try {
+            HealthComponent health = healthEndpoint.health();
+            String healthJson = new ObjectMapper().writeValueAsString(health);
+            LOGGER.info("Application health: {}", healthJson);
+        } catch (Exception e) {
+            LOGGER.error("Exception occurred while logging application health", e);
+        }
+    }
+}
+
+import org.junit.Before;
+import org.junit.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.springframework.boot.actuate.health.HealthComponent;
+import org.springframework.boot.actuate.health.HealthEndpoint;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import static org.mockito.Mockito.*;
+
+public class HealthCheckerTest {
+    @Mock
+    private HealthEndpoint healthEndpoint;
+
+    @Mock
+    private HealthComponent healthComponent;
+
+    @InjectMocks
+    private HealthChecker healthChecker;
+
+    @Before
+    public void setup() {
+        MockitoAnnotations.initMocks(this);
+        ReflectionTestUtils.setField(healthChecker, "healthEndpoint", healthEndpoint);
     }
 
+    @Test
+    public void testLogHealth() throws Exception {
+        when(healthEndpoint.health()).thenReturn(healthComponent);
+        when(healthComponent.getStatus()).thenReturn(HealthComponent.Status.UP);
+
+        healthChecker.logHealth();
+
+        verify(healthEndpoint, times(1)).health();
+    }
+
+    @Test
+    public void testLogHealthWithException() throws Exception {
+        when(healthEndpoint.health()).thenThrow(new RuntimeException("Error getting health"));
+
+        healthChecker.logHealth();
+
+        verify(healthEndpoint, times(1)).health();
+    }
 }
