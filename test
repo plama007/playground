@@ -1,9 +1,50 @@
-@Test
-public void testLogHealth() {
-    HealthComponent healthComponent = new Health.Builder().status(Status.UP).build();
-    when(healthEndpoint.health()).thenReturn(healthComponent);
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.slf4j.Logger;
+import org.springframework.boot.actuate.health.Health;
+import org.springframework.boot.actuate.health.HealthComponent;
+import org.springframework.boot.actuate.health.HealthEndpoint;
+import org.springframework.boot.actuate.health.Status;
 
-    healthChecker.logHealth();
+import static org.mockito.Mockito.*;
 
-    verify(healthEndpoint, times(1)).health();
+public class HealthCheckerTest {
+    @Mock
+    private HealthEndpoint healthEndpoint;
+
+    @Mock
+    private HealthComponent healthComponent;
+
+    @Mock
+    private Logger logger;
+
+    @InjectMocks
+    private HealthChecker healthChecker;
+
+    @BeforeEach
+    public void setup() {
+        MockitoAnnotations.initMocks(this);
+    }
+
+    @Test
+    public void testLogHealth() {
+        when(healthEndpoint.health()).thenReturn(healthComponent);
+        when(healthComponent.getStatus()).thenReturn(Status.UP);
+
+        healthChecker.logHealth();
+
+        verify(logger, times(1)).info(eq("Application health: {}"), any(String.class));
+    }
+
+    @Test
+    public void testLogHealthWithException() {
+        when(healthEndpoint.health()).thenThrow(new RuntimeException("Error getting health"));
+
+        healthChecker.logHealth();
+
+        verify(logger, times(1)).error(eq("Error logging health"), any(RuntimeException.class));
+    }
 }
