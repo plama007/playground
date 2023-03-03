@@ -1,2 +1,13 @@
-const timezoneOffset = dateWithoutTimezone.getTimezoneOffset();
-dateWithoutTimezone.setTime(dateWithoutTimezone.getTime() + timezoneOffset * 60 * 1000);
+// Import the required modules
+import { Pipe, PipeTransform } from '@angular/core';
+import * as moment from 'moment-timezone';
+
+@Pipe({
+  name: 'centralDate'
+})
+export class CentralDatePipe implements PipeTransform {
+  transform(dateString: string): string {
+    const date = moment.tz(`${dateString} 00:00:00`, 'YYYY-MM-DD HH:mm:ss', 'America/Chicago');
+    return date.format('MM/DD/YYYY');
+  }
+}
