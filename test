@@ -1,23 +1,2 @@
-import { Pipe, PipeTransform } from '@angular/core';
-import { formatDate } from '@angular/common';
-
-@Pipe({
-  name: 'dateWithoutTimezone'
-})
-export class DateWithoutTimezonePipe implements PipeTransform {
-  transform(value: string, format: string = 'mediumDate', locale: string = 'en-US'): string {
-    if (!value) {
-      return '';
-    }
-
-    const dateWithoutTimezone = new Date(value);
-    if (isNaN(dateWithoutTimezone.getTime())) {
-      throw new Error(`Invalid date: ${value}`);
-    }
-
-    const timezoneOffset = dateWithoutTimezone.getTimezoneOffset();
-    dateWithoutTimezone.setTime(dateWithoutTimezone.getTime() - timezoneOffset * 60 * 1000);
-
-    return formatDate(dateWithoutTimezone, format, locale);
-  }
-}
+const timezoneOffset = dateWithoutTimezone.getTimezoneOffset();
+dateWithoutTimezone.setTime(dateWithoutTimezone.getTime() + timezoneOffset * 60 * 1000);
