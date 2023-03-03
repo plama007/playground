@@ -1,53 +1,23 @@
 import { Pipe, PipeTransform } from '@angular/core';
 import { formatDate } from '@angular/common';
 
-@Pipe({name: 'dateWithoutTimezone'})
+@Pipe({
+  name: 'dateWithoutTimezone'
+})
 export class DateWithoutTimezonePipe implements PipeTransform {
-  transform(value: string, format?: string): string {
+  transform(value: string, format: string = 'mediumDate', locale: string = 'en-US'): string {
+    if (!value) {
+      return '';
+    }
+
     const dateWithoutTimezone = new Date(value);
+    if (isNaN(dateWithoutTimezone.getTime())) {
+      throw new Error(`Invalid date: ${value}`);
+    }
+
     const timezoneOffset = dateWithoutTimezone.getTimezoneOffset();
     dateWithoutTimezone.setTime(dateWithoutTimezone.getTime() - timezoneOffset * 60 * 1000);
-    return formatDate(dateWithoutTimezone, format || 'mediumDate', 'en-US');
+
+    return formatDate(dateWithoutTimezone, format, locale);
   }
 }
-
-
-import { DateWithoutTimezonePipe } from './date-without-timezone.pipe';
-
-describe('DateWithoutTimezonePipe', () => {
-  let pipe: DateWithoutTimezonePipe;
-
-  beforeEach(() => {
-    pipe = new DateWithoutTimezonePipe();
-  });
-
-  it('transforms a string into a Date object without timezone', () => {
-    const result = pipe.transform('2023-03-02T10:00:00.000Z');
-    expect(result instanceof Date).toBe(true);
-    expect(result.getTimezoneOffset()).toBe(0);
-    expect(result.toISOString()).toBe('2023-03-02T10:00:00.000Z');
-  });
-
-  it('transforms a string into a formatted string with default format', () => {
-    const result = pipe.transform('2023-03-02T10:00:00.000Z');
-    expect(result).toBe('Mar 2, 2023');
-  });
-
-  it('transforms a string into a formatted string with custom format', () => {
-    const result = pipe.transform('2023-03-02T10:00:00.000Z', 'yyyy/MM/dd');
-    expect(result).toBe('2023/03/02');
-  });
-});
-
-<ng-container matColumnDef="myDateColumn">
-  <th mat-header-cell *matHeaderCellDef> My Date Column </th>
-  <td mat-cell *matCellDef="let item">
-    <ng-container *ngIf="item.myDate; else notDate">{{ item.myDate | dateWithoutTimezone:'mediumDate' }}</ng-container>
-    <ng-template #notDate>{{ item.myDate }}</ng-template>
-  </td>
-</ng-container>
-
-<ng-container matColumnDef="myOtherColumn">
-  <th mat-header-cell *matHeaderCellDef> My Other Column </th>
-  <td mat-cell *matCellDef="let item"> {{ item.myOtherColumn }} </td>
-</ng-container>
