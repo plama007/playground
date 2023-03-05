@@ -1,0 +1,62 @@
+import { Pipe, PipeTransform } from '@angular/core';
+import * as moment from 'moment';
+
+@Pipe({
+  name: 'dateFormat'
+})
+export class DateFormatPipe implements PipeTransform {
+
+  /**
+   * Transforms the input date string into the specified format.
+   * If no format is specified, the default format is 'MM/DD/YYYY'.
+   * @param value The input date string in ISO format or ISO with time zone offset format.
+   * @param format The output date format. Defaults to 'MM/DD/YYYY'.
+   * @returns The input date string formatted into the specified format.
+   */
+  transform(value: string, format: string = 'MM/DD/YYYY'): string {
+    // Parse the input date string using moment.js
+    const date = moment(value);
+
+    // Format the date using the specified format
+    const formattedDate = date.format(format);
+
+    return formattedDate;
+  }
+}
+
+import { DateFormatPipe } from './date-format.pipe';
+
+describe('DateFormatPipe', () => {
+  let pipe: DateFormatPipe;
+
+  beforeEach(() => {
+    pipe = new DateFormatPipe();
+  });
+
+  it('should transform a valid input date string to the specified output format', () => {
+    const inputDate = '2022-02-28T00:00:00-06:00';
+    const outputFormat = 'MM/dd/yyyy';
+    const expectedOutput = '02/28/2022';
+
+    expect(pipe.transform(inputDate, outputFormat)).toBe(expectedOutput);
+  });
+
+  it('should transform a valid input date string without a timezone offset to the specified output format', () => {
+    const inputDate = '2022-02-28';
+    const outputFormat = 'MM/dd/yyyy';
+    const expectedOutput = '02/28/2022';
+
+    expect(pipe.transform(inputDate, outputFormat)).toBe(expectedOutput);
+  });
+
+  it('should return an empty string if the input value is null or undefined', () => {
+    const inputDate = null;
+    const outputFormat = 'MM/dd/yyyy';
+
+    expect(pipe.transform(inputDate, outputFormat)).toBe('');
+
+    const undefinedInputDate = undefined;
+
+    expect(pipe.transform(undefinedInputDate, outputFormat)).toBe('');
+  });
+});
