@@ -1,16 +1,109 @@
-@Bean
-public CachedKeyStore cachedKeyStore(Environment env, CloudKeystoreService keystoreService) {
-    CachedKeyStore cachedKeyStore;
-    try {
-        CloudKeystoreService service = getLoadedKeystoreService(new CloudVenafiCertificateCacheResolver());
-        cachedKeyStore = service.cache().get("default");
-    } catch (UnresolvableCloudFoundryServiceException e) {
-        LOG.error(e.getLocalizedMessage(), "Unable to set default keystore");
-        VenafiCertificateCacheResolver resolver = new VenafiCertificateCacheResolver(
-                "CA03427_VENAFI_T_ELV",
-                "vtest@3427WMAWS7243");
-        resolver.addCertificate("local", env.getProperty("venafi-certificates.path"));
-        cachedKeyStore = getLoadedKeystoreService(resolver).cache().get("local");
+package com.wellsfargo.wmaws.config;
+
+import com.wellsfargo.cloud.tls.CacheResolver;
+import com.wellsfargo.cloud.tls.CloudKeystoreService;
+import com.wellsfargo.cloud.tls.exceptions.UnresolvableCloudFoundryServiceException;
+import com.wellsfargo.cloud.tls.keystore.CachedKeyStore;
+import com.wellsfargo.cloud.tls.keystore.KeyStoreCache;
+import com.wellsfargo.cloud.tls.keystore.resolvers.CloudVenafiCertificateCacheResolver;
+import com.wellsfargo.cloud.tls.keystore.resolvers.VenafiCertificateCacheResolver;
+import org.apache.http.client.HttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.ssl.SSLContextBuilder;
+import org.apache.http.ssl.SSLContexts;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
+import org.springframework.core.env.Environment;
+import org.springframework.http.client.ClientHttpRequestFactory;
+import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
+import org.springframework.web.client.RestTemplate;
+
+import javax.annotation.PostConstruct;
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManagerFactory;
+import java.security.GeneralSecurityException;
+
+@Configuration
+public class VenafiConfig {
+    private static final Logger LOG = LoggerFactory.getLogger(VenafiConfig.class);
+    public static final int MAXIMUM_CONNECTION_PER_ROUTE = 500;
+    public static final int MAXIMUM_TOTAL_ACTIVE_CONNECTION = 1000;
+
+    private final Environment environment;
+    private final CloudKeystoreService keystoreService;
+
+    @Autowired
+    public VenafiConfig(Environment environment, CloudKeystoreService keystoreService) {
+        this.environment = environment;
+        this.keystoreService = keystoreService;
     }
-    return cachedKeyStore;
+
+    @Bean
+    public CachedKeyStore cachedKeyStore() {
+        CachedKeyStore cachedKeyStore;
+        try {
+            CloudKeystoreService service = getLoadedKeystoreService(new CloudVenafiCertificateCacheResolver());
+            cachedKeyStore = service.cache().get("default");
+        } catch (UnresolvableCloudFoundryServiceException e) {
+            LOG.error(e.getLocalizedMessage(), "Unable to set default keystore");
+            VenafiCertificateCacheResolver resolver = new VenafiCertificateCacheResolver(
+                    "CA03427_VENAFI_T_ELV",
+                    "vtest@3427WMAWS7243");
+            resolver.addCertificate("local", environment.getProperty("venafi-certificates.path"));
+            cachedKeyStore = getLoadedKeystoreService(resolver).cache().get("local");
+        }
+        return cachedKeyStore;
+    }
+
+    @PostConstruct
+    public SSLContext getSSLContext() throws GeneralSecurityException {
+        CachedKeyStore cachedKeyStore = cachedKeyStore();
+
+        final SSLContextBuilder sslContextBuilder = SSLContexts.custom();
+        SSLContext sslContext;
+        sslContextBuilder.loadKeyMaterial(cachedKeyStore.keystore(), cachedKeyStore.getPassword().toCharArray());
+        sslContext = sslContextBuilder.build();
+        return sslContext;
+    }
+
+    @Bean
+    @Primary
+    public RestTemplate restTemplate() throws GeneralSecurityException {
+        // setting up the http client with the new ssl Context.
+        HttpClient httpClient = HttpClientBuilder.create()
+                .setSSLContext(getSSLContext())
+                .setMaxConnPerRoute(MAXIMUM_CONNECTION_PER_ROUTE)
+                .setMaxConnTotal(MAXIMUM_TOTAL_ACTIVE_CONNECTION)
+                .build();
+        ClientHttpRequestFactory requestFactory = new HttpComponentsClientHttpRequestFactory(httpClient);
+        return new RestTemplate(request
+private CloudKeystoreService getLoadedKeystoreService(CacheResolver<KeyStoreCache> resolver) {
+    CloudKeystoreService keystoreService = new CloudKeystoreService();
+    keystoreService.addCacheResolver(resolver);
+    keystoreService.loadCache();
+    return keystoreService;
+}
+
+@Bean
+public KeyManagerFactory keyManagerFactory() throws GeneralSecurityException {
+    KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+    keyManagerFactory.init(cachedKeyStore().keystore(), cachedKeyStore().getPassword().toCharArray());
+    return keyManagerFactory;
+}
+
+@Bean
+public TrustManagerFactory trustManagerFactory() throws GeneralSecurityException {
+    TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+    trustManagerFactory.init(cachedKeyStore().keystore());
+    return trustManagerFactory;
+}
+
+@Bean
+public HttpComponentsClientHttpRequestFactory httpComponentsClientHttpRequestFactory() {
+    return new HttpComponentsClientHttpRequestFactory();
 }
