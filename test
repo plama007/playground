@@ -1,1 +1,5 @@
-Do you recommend using icmp-ping-web as a reference for an Angular-Spring Boot application or is there a more Angular-specific implementation that you suggest?
+security.oauth2.client.registration.ping.client-id=${PING_CLIENT_ID}
+security.oauth2.client.registration.ping.client-secret=${PING_CLIENT_SECRET}
+security.oauth2.client.registration.ping.authorization-grant-type=authorization_code
+security.oauth2.client.registration.ping.scope=openid,cswfcprofile
+security.oauth2.client.provider.ping.issuer-uri=https://cspf-sit.wellsfargo.com
