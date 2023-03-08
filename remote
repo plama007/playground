@@ -1,55 +1,15 @@
-@RestController
-public class HealthController {
-    private static final Logger LOGGER = LoggerFactory.getLogger(HealthController.class);
+oauth.client=ping
 
-    @Autowired
-    private HealthEndpoint healthEndpoint;
+spring.security.oauth2.client.registration.ping.client-id=<Client Id>
+spring.security.oauth2.client.registration.ping.client-secret=<Secret>
+spring.security.oauth2.client.registration.ping.authorization-grant-type=authorization_code
+spring.security.oauth2.client.registration.ping.redirect-uri=http://localhost:8085/logicbox_ui/login/oauth2/code/ping
+spring.security.oauth2.client.registration.ping.scope=openid,cswfcprofile,csappgroups:XXCA_WXXS_GPE_LXXB,cswfcaddress
+#spring.security.oauth2.client.registration.ping.client-authentication-method=post
 
-    @GetMapping("/health")
-    public String healthStatus() {
-        try {
-            HealthComponent health = healthEndpoint.health();
-            String healthJson = new ObjectMapper().writeValueAsString(health);
-            LOGGER.info("WMAWS Service health: {}", healthJson);
-            return healthJson;
-        } catch (JsonProcessingException e) {
-            LOGGER.error("Exception encountered while getting application health", e);
-        }
-        return null;
-    }
-}
-
-@RestController
-public class HealthController {
-    private static final Logger LOGGER = LoggerFactory.getLogger(HealthController.class);
-
-    @Autowired
-    private ServiceCloudClient serviceCloudClient;
-
-    @GetMapping("/health-status")
-    public ResponseEntity<Object> healthStatus() {
-        Object resp;
-        try {
-            resp = serviceCloudClient.execute(URLConstants.HEALTH, HttpMethod.GET, null, null, "", null);
-            return ResponseEntity.ok(resp);
-        } catch (Exception e) {
-            LOGGER.error(WMAWSConstants.RESPONSE_ERROR, e);
-        }
-        return ResponseEntity.ok(WMAWSConstants.RESPONSE_ERROR);
-    }
-}
-
-@Component
-public class HealthChecker {
-    private static final Logger LOGGER = LoggerFactory.getLogger(HealthChecker.class);
-
-    @Autowired
-    private HealthEndpoint healthEndpoint;
-
-    @Scheduled(fixedRate = 60000)
-    public void logHealth() throws JsonProcessingException {
-        HealthComponent health = healthEndpoint.health();
-        String healthJson = new ObjectMapper().writeValueAsString(health);
-        LOGGER.info("Application health: {}", healthJson);
-    }
-}
+spring.security.oauth2.client.provider.ping.issuer-uri=https://cspf-sit.wellsfargo.net
+spring.security.oauth2.client.provider.ping.token-uri=https://cspf-sit.wellsfargo.net/as/token.oauth2
+spring.security.oauth2.client.provider.ping.authorization-uri=https://cspf-sit.wellsfargo.net/as/authorization.oauth2
+spring.security.oauth2.client.provider.ping.jwk-set-uri=https://cspf-sit.wellsfargo.net/pf/JWKS
+spring.security.oauth2.client.provider.ping.user-info-uri=https://cspf-sit.wellsfargo.net/idp/userinfo.openid
+#spring.security.oauth2.client.provider.ping.user-name-attribute=sub
