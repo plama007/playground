@@ -1,13 +1,1 @@
-// Import the required modules
-import { Pipe, PipeTransform } from '@angular/core';
-import * as moment from 'moment-timezone';
-
-@Pipe({
-  name: 'centralDate'
-})
-export class CentralDatePipe implements PipeTransform {
-  transform(dateString: string): string {
-    const date = moment.tz(`${dateString} 00:00:00`, 'YYYY-MM-DD HH:mm:ss', 'America/Chicago');
-    return date.format('MM/DD/YYYY');
-  }
-}
+Do you recommend using icmp-ping-web as a reference for an Angular-Spring Boot application or is there a more Angular-specific implementation that you suggest?
