@@ -1,15 +1,16 @@
-oauth.client=ping
-
-spring.security.oauth2.client.registration.ping.client-id=<Client Id>
-spring.security.oauth2.client.registration.ping.client-secret=<Secret>
-spring.security.oauth2.client.registration.ping.authorization-grant-type=authorization_code
-spring.security.oauth2.client.registration.ping.redirect-uri=http://localhost:8085/logicbox_ui/login/oauth2/code/ping
-spring.security.oauth2.client.registration.ping.scope=openid,cswfcprofile,csappgroups:XXCA_WXXS_GPE_LXXB,cswfcaddress
-#spring.security.oauth2.client.registration.ping.client-authentication-method=post
-
-spring.security.oauth2.client.provider.ping.issuer-uri=https://cspf-sit.wellsfargo.net
-spring.security.oauth2.client.provider.ping.token-uri=https://cspf-sit.wellsfargo.net/as/token.oauth2
-spring.security.oauth2.client.provider.ping.authorization-uri=https://cspf-sit.wellsfargo.net/as/authorization.oauth2
-spring.security.oauth2.client.provider.ping.jwk-set-uri=https://cspf-sit.wellsfargo.net/pf/JWKS
-spring.security.oauth2.client.provider.ping.user-info-uri=https://cspf-sit.wellsfargo.net/idp/userinfo.openid
-#spring.security.oauth2.client.provider.ping.user-name-attribute=sub
+@Bean
+public CachedKeyStore cachedKeyStore(Environment env, CloudKeystoreService keystoreService) {
+    CachedKeyStore cachedKeyStore;
+    try {
+        CloudKeystoreService service = getLoadedKeystoreService(new CloudVenafiCertificateCacheResolver());
+        cachedKeyStore = service.cache().get("default");
+    } catch (UnresolvableCloudFoundryServiceException e) {
+        LOG.error(e.getLocalizedMessage(), "Unable to set default keystore");
+        VenafiCertificateCacheResolver resolver = new VenafiCertificateCacheResolver(
+                "CA03427_VENAFI_T_ELV",
+                "vtest@3427WMAWS7243");
+        resolver.addCertificate("local", env.getProperty("venafi-certificates.path"));
+        cachedKeyStore = getLoadedKeystoreService(resolver).cache().get("local");
+    }
+    return cachedKeyStore;
+}
