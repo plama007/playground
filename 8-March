@@ -1,0 +1,213 @@
+import { OAuthModule } from 'angular-oauth2-oidc';
+
+@NgModule({
+  imports: [
+    // other modules
+    OAuthModule.forRoot({
+      resourceServer: {
+        sendAccessToken: true,
+        allowedUrls: [API_URL],
+        forbiddenUrls: [API_URL + '/login'],
+      },
+      authServer: {
+        issuer: 'https://<ping_federate_url>/as',
+        clientId: '<client_id>',
+        redirectUri: window.location.origin + '/auth-callback',
+        scope: 'openid profile',
+      },
+    }),
+  ],
+  // other declarations
+})
+export class AppModule { }
+
+@Configuration
+@EnableOAuth2Sso
+public class WebSecurityConfigurer extends WebSecurityConfigurerAdapter {
+
+  @Override
+  public void configure(HttpSecurity http) throws Exception {
+    http.authorizeRequests()
+      .antMatchers("/login/**").permitAll()
+      .anyRequest().authenticated()
+      .and().csrf().csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+      .and().logout().logoutSuccessUrl("/");
+  }
+
+  @Override
+  public void configure(final OAuth2SsoConfigurer oauth2SsoConfigurer) {
+    oauth2SsoConfigurer
+      .loginProcessingUrl("/login")
+      .defaultSuccessURL("/")
+      .and().oauth2Client()
+      .clientId("<client_id>")
+      .clientSecret("<client_secret>")
+      .accessTokenUri("https://<ping_federate_url>/as/token.oauth2")
+      .userAuthorizationUri("https://<ping_federate_url>/as/authorize.oauth2")
+      .resource("openid")
+      .userInfoUri("https://<ping_federate_url>/idp/userinfo.openid");
+  }
+
+}
+
+import { Injectable } from '@angular/core';
+import { OAuthService } from 'angular-oauth2-oidc';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class AuthService {
+  constructor(private oauthService: OAuthService) {
+    this.configureOAuth();
+  }
+
+  private configureOAuth() {
+    this.oauthService.configure({
+      issuer: 'https://<ping_federate_url>/as',
+      redirectUri: window.location.origin + '/auth-callback',
+      clientId: '<client_id>',
+      scope: 'openid profile',
+    });
+
+    this.oauthService.setStorage(localStorage);
+  }
+
+  public login() {
+    this.oauthService.initLoginFlow();
+  }
+
+  public logout() {
+    this.oauthService.logOut();
+  }
+
+  public isAuthenticated(): boolean {
+    return this.oauthService.hasValidAccessToken();
+  }
+
+  public getAccessToken(): string {
+    return this.oauthService.getAccessToken();
+  }
+}
+
+import { Component } from '@angular/core';
+import { AuthService } from './auth.service';
+
+@Component({
+  selector: 'app-root',
+  template: `
+    <h1>Welcome to the application</h1>
+    <button *ngIf="!authService.isAuthenticated()" (click)="authService.login()">Log in</button>
+    <button *ngIf="authService.isAuthenticated()" (click)="authService.logout()">Log out</button>
+    <div *ngIf="authService.isAuthenticated()">
+      <p>Hello, {{ username }}!</p>
+    </div>
+  `,
+})
+export class AppComponent {
+  public username: string;
+
+  constructor(public authService: AuthService) {
+    if (this.authService.isAuthenticated()) {
+      const tokenPayload = JSON.parse(atob(this.authService.getAccessToken().split('.')[1]));
+      this.username = tokenPayload.preferred_username;
+    }
+  }
+}
+
+import { Injectable } from '@angular/core';
+import { HttpInterceptor, HttpRequest, HttpHandler, HttpErrorResponse } from '@angular/common/http';
+import { catchError, switchMap } from 'rxjs/operators';
+import { Observable, throwError } from 'rxjs';
+import { AuthService } from './auth.service';
+
+@Injectable()
+export class AuthInterceptor implements HttpInterceptor {
+  constructor(private authService: AuthService) {}
+
+  intercept(request: HttpRequest<any>, next: HttpHandler): Observable<any> {
+    request = request.clone({
+      setHeaders: {
+        Authorization: `Bearer ${this.authService.getAccessToken()}`,
+      },
+    });
+
+    return next.handle(request).pipe(
+      catchError((error: HttpErrorResponse) => {
+        if (error.status === 401) {
+          return this.authService.refreshToken().pipe(
+            switchMap(() => {
+              request = request.clone({
+                setHeaders: {
+                  Authorization: `Bearer ${this.authService.getAccessToken()}`,
+                },
+              });
+              return next.handle(request);
+            }),
+            catchError((error: any) => {
+              this.authService.logout();
+              return throwError(error);
+            })
+          );
+        }
+
+        return throwError(error);
+      })
+    );
+  }
+}
+
+import { Injectable } from '@angular/core';
+import { HttpInterceptor, HttpRequest, HttpHandler, HttpErrorResponse } from '@angular/common/http';
+import { catchError, switchMap } from 'rxjs/operators';
+import { Observable, throwError } from 'rxjs';
+import { AuthService } from './auth.service';
+
+@Injectable()
+export class AuthInterceptor implements HttpInterceptor {
+  constructor(private authService: AuthService) {}
+
+  intercept(request: HttpRequest<any>, next: HttpHandler): Observable<any> {
+    const csrfToken = this.authService.getCsrfToken();
+    if (csrfToken) {
+      request = request.clone({
+        headers: request.headers.set('X-XSRF-TOKEN', csrfToken),
+      });
+    }
+
+    request = request.clone({
+      setHeaders: {
+        Authorization: `Bearer ${this.authService.getAccessToken()}`,
+      },
+    });
+
+    return next.handle(request).pipe(
+      catchError((error: HttpErrorResponse) => {
+        if (error.status === 401) {
+          return this.authService.refreshToken().pipe(
+            switchMap(() => {
+              request = request.clone({
+                setHeaders: {
+                  Authorization: `Bearer ${this.authService.getAccessToken()}`,
+                },
+              });
+              if (csrfToken) {
+                request = request.clone({
+                  headers: request.headers.set('X-XSRF-TOKEN', csrfToken),
+                });
+              }
+              return next.handle(request);
+            }),
+            catchError((error: any) => {
+              this.authService.logout();
+              return throwError(error);
+            })
+          );
+        }
+
+        // handle other error cases
+        console.error('Error occurred:', error);
+        return throwError(error);
+      })
+    );
+  }
+}
