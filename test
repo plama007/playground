@@ -1,136 +1,55 @@
-@Configuration
-@EnableWebSecurity
-@EnableGlobalMethodSecurity(prePostEnabled = true)
-public class SecurityConfig extends WebSecurityConfigurerAdapter {
+package com.example.app;
 
-    // Define constants used for authentication and session management
-    private static final String CHANNEL_SECURE_USER_NAME_HEADER = "cssamaccountname";
-    private static final String CHANNEL_SECURE_LOGOUT_URL = "https://csidfcauthportal.wellsfargo.net/login/logoff.htm";
-    private static final String CHANNEL_SECURE_AUTHORITIES_HEADER = "CSGROUPS";
-    private static final Integer MAX_SESSION_FOR_USER = 1;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.core.oidc.user.OidcUser;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.GetMapping;
 
-    // Create a UserDetailsService bean to retrieve user details for authentication
-    @Bean()
-    public UserDetailsService userDetailsService() {
-        return userName -> {
-            WmawsUserDetails userDetails;
-            RequestAttributes requestAttributes = RequestContextHolder.currentRequestAttributes();
-            if (!(requestAttributes instanceof ServletRequestAttributes)) {
-                throw new IllegalArgumentException("requestAttributes of unknown class [" + requestAttributes.getClass() + "]");
-            }
-            HttpServletRequest request = ((ServletRequestAttributes) requestAttributes).getRequest();
+@Controller
+public class UserClaimController {
 
-            userDetails = new WmawsUserDetails(userName, getAuthorities(request.getHeader(CHANNEL_SECURE_AUTHORITIES_HEADER)));
-            return userDetails;
-        };
+    private final Logger logger = LoggerFactory.getLogger(this.getClass());
+    private final ObjectMapper objectMapper;
+    private final static String PROFILE_VIEW = "profile";
+
+    @Autowired
+    public UserClaimController(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
     }
 
-    // Create a bean to customize the security configuration for OAuth2 authentication
-    @Bean
-    public SecurityFilterChain oauthSecurity(HttpSecurity http, LogoutHandler logoutHandler) throws Exception {
-        http.authorizeRequests()
-                // Allow all users to access the home pages and the static images directory
-                .mvcMatchers("/", "/images/**").permitAll()
-                // Require authentication for any GET requests to URLs that start with "/web/"
-                .antMatchers(HttpMethod.GET, "/web/**").authenticated()
-                // Set up OAuth2 login and logout
-                .and().oauth2Login()
-                .and().logout()
-                .logoutRequestMatcher(new AntPathRequestMatcher("/logout"))
-                .addLogoutHandler(logoutHandler);
-        // Create a SecurityFilterChain bean with the configured HttpSecurity object
-        return new DefaultSecurityFilterChain(http.build());
+    @GetMapping("/web/profile")
+    public String userProfile(Model model, Authentication auth) {
+        OidcUser user = (OidcUser) auth.getPrincipal();
+        model.addAttribute(PROFILE_VIEW, user.getClaims());
+        model.addAttribute("profileJson", getUserClaimsAndAuthoritiesJson(user.getClaims(), auth.getAuthorities()));
+        return PROFILE_VIEW;
     }
 
-    // Create a bean to customize the ID token decoder factory for OAuth2 authentication
-    @Bean
-    public JwtDecoderFactory<ClientRegistration> idTokenDecoderFactory() {
-        OidcIdTokenDecoderFactory idTokenDecoderFactory = new OidcIdTokenDecoderFactory();
-        // Set the JWS algorithm resolver to use PS256
-        idTokenDecoderFactory.setJwsAlgorithmResolver(clientRegistration -> SignatureAlgorithm.PS256);
-        return idTokenDecoderFactory;
+    @GetMapping("/protected/profile")
+    public String protectedUserProfile(Model model, Authentication auth) {
+        OidcUser user = (OidcUser) auth.getPrincipal();
+        model.addAttribute(PROFILE_VIEW, user.getClaims());
+        model.addAttribute("profileJson", getUserClaimsAndAuthoritiesJson(user.getClaims(), auth.getAuthorities()));
+        return PROFILE_VIEW;
     }
 
-    // Create a nested WebSecurityConfigurerAdapter class to customize other aspects of the security configuration
-    @Configuration
-    @EnableWebSecurity
-    public static class WebSecurityConfig extends WebSecurityConfigurerAdapter {
-
-        private static final Logger LOGGER = LoggerFactory.getLogger(WebSecurityConfig.class);
-
-        @Value("${channelsecure.enabled}")
-        private String isChannelSecureEnabled;
-
-        @Value("${csrf-security-enabled:true}")
-        private Boolean csrfEnabled;
-
-        @Value("${app.security.ignore-path}")
-        private String appSecurityIgnorePath;
-
-        @Bean
-        public SessionRegistry sessionRegistry() {
-            return new SessionRegistryImpl();
+    private String getUserClaimsAndAuthoritiesJson(Map<String, Object> claims, Collection auth) {
+        try {
+            Map<String, Object> mergedClaims = new HashMap<>(claims);
+            mergedClaims.put("roles", auth);
+            return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(mergedClaims);
+        } catch (JsonProcessingException jpe) {
+            logger.error("Error parsing user claims and authorities to JSON", jpe);
         }
-
-        @Override
-        public void configure(WebSecurity web) throws Exception {
-            // Ignore paths specified in app.security.ignore-path property
-            web.ignoring().antMatchers(appSecurityIgnorePath.split(","));
-        }
-
-        @Override
-        protected void configure(HttpSecurity http) throws Exception {
-            LOGGER.debug("Using HTTP security...");
-
-            if ("true".equalsIgnoreCase(isChannelSecureEnabled)) {
-                // Set up RequestHeaderAuthenticationFilter to authenticate requests based on the CHANNEL_SECURE_USER_NAME_HEADER header
-                RequestHeaderAuthenticationFilter filter = new RequestHeaderAuthenticationFilter
-            filter.setAuthenticationManager(this.authenticationManager());
-            filter.setCheckForPrincipalChanges(true);
-            filter.setPrincipalRequestHeader(CHANNEL_SECURE_USER_NAME_HEADER);
-            http.addFilter(filter);
-        }
-
-        if (Boolean.TRUE.equals(csrfEnabled)) {
-            // Set up CSRF protection with a cookie-based token repository
-            CookieCsrfTokenRepository cookieCsrfTokenRepository = new CookieCsrfTokenRepository();
-            cookieCsrfTokenRepository.setCookieHttpOnly(false);
-            http.csrf().csrfTokenRepository(cookieCsrfTokenRepository);
-        } else {
-            // Disable CSRF protection
-            http.csrf().disable();
-        }
-
-        // Set up CORS support
-        http.cors();
-
-        // Set up session management
-        http.sessionManagement()
-                .sessionFixation().migrateSession();
-
-        http.sessionManagement()
-                .maximumSessions(MAX_SESSION_FOR_USER)
-                .maxSessionsPreventsLogin(false).expiredUrl(CHANNEL_SECURE_LOGOUT_URL)
-                .sessionRegistry(sessionRegistry());
-
-        // Set up logout handling
-        http.logout()
-                .clearAuthentication(true)
-                .logoutSuccessHandler((request, response, authentication) -> response.setStatus(HttpServletResponse.SC_OK))
-                .invalidateHttpSession(true)
-                .deleteCookies("JSESSIONID", "CSISESSION");
-
-        LOGGER.debug("Completed HTTP security configuration.");
+        return "Error parsing user claims and authorities to JSON.";
     }
-}
-
-// Create a helper method to parse authority strings into a list of SimpleGrantedAuthority objects
-private List<SimpleGrantedAuthority> getAuthorities(String authoritesString) {
-    List<SimpleGrantedAuthority> authorities = new ArrayList<>();
-    if (authoritesString != null && !authoritesString.trim().isEmpty()) {
-        for (String authority : authoritesString.split("\\^")) {
-            authorities.add(new SimpleGrantedAuthority(authority));
-        }
-    }
-    return authorities;
 }
