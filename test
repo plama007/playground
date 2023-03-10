@@ -1,55 +1,34 @@
-package com.example.app;
+Sure, here's an example email you can use as a template:
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.oauth2.core.oidc.user.OidcUser;
-import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.GetMapping;
+Subject: Request for assistance with ChannelSecure integration in Spring Boot application
 
-@Controller
-public class UserClaimController {
+Dear [person's name],
 
-    private final Logger logger = LoggerFactory.getLogger(this.getClass());
-    private final ObjectMapper objectMapper;
-    private final static String PROFILE_VIEW = "profile";
+I hope this email finds you well. I recently cloned the git repository you created for integrating ChannelSecure with a Spring Boot application, and I wanted to thank you for sharing the code.
 
-    @Autowired
-    public UserClaimController(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
-    }
+While I was able to successfully view the home screen, I faced an issue when I tried to log in. I noticed that ChannelSecure provided a client-id, but I'm not sure if I also need to provide a client-secret. Could you please confirm if a client-secret is also required for this integration? Any help you can provide would be greatly appreciated and would save me a lot of time.
 
-    @GetMapping("/web/profile")
-    public String userProfile(Model model, Authentication auth) {
-        OidcUser user = (OidcUser) auth.getPrincipal();
-        model.addAttribute(PROFILE_VIEW, user.getClaims());
-        model.addAttribute("profileJson", getUserClaimsAndAuthoritiesJson(user.getClaims(), auth.getAuthorities()));
-        return PROFILE_VIEW;
-    }
+I've attached a screenshot of the error message I received for your reference. If there's any additional information or context that would be helpful, please let me know.
 
-    @GetMapping("/protected/profile")
-    public String protectedUserProfile(Model model, Authentication auth) {
-        OidcUser user = (OidcUser) auth.getPrincipal();
-        model.addAttribute(PROFILE_VIEW, user.getClaims());
-        model.addAttribute("profileJson", getUserClaimsAndAuthoritiesJson(user.getClaims(), auth.getAuthorities()));
-        return PROFILE_VIEW;
-    }
+Thank you for your time and consideration. I look forward to hearing back from you.
 
-    private String getUserClaimsAndAuthoritiesJson(Map<String, Object> claims, Collection auth) {
-        try {
-            Map<String, Object> mergedClaims = new HashMap<>(claims);
-            mergedClaims.put("roles", auth);
-            return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(mergedClaims);
-        } catch (JsonProcessingException jpe) {
-            logger.error("Error parsing user claims and authorities to JSON", jpe);
-        }
-        return "Error parsing user claims and authorities to JSON.";
-    }
-}
+Best regards,
+[Your Name]
+
+
+Certainly! Here's an example email that combines the two:
+
+Subject: Question about migrating from ChannelSecure Siteminder to Ping and ChannelSecure integration in Spring Boot application
+
+Dear [person's name],
+
+I hope this email finds you well. I have two questions related to ChannelSecure that I was hoping you could assist me with.
+
+First, I am currently working on a migration project to move from ChannelSecure Siteminder to Ping, and I wanted to reach out to you for some guidance. While I have a general understanding of the migration process, I would greatly appreciate any insights or best practices you may have regarding this migration. Specifically, if you have experience with similar migrations or if you have any recommendations for resources or documentation to review, I would be grateful for any information you can provide. I am committed to ensuring a successful migration, and I understand that there may be challenges and complexities involved. With that in mind, I'm wondering if you have any suggestions for engaging with Ping's professional services team or a trusted partner to assist with the migration, depending on the complexity of our environment.
+
+Secondly, I recently cloned the git repository you created for integrating ChannelSecure with a Spring Boot application, and I wanted to thank you for sharing the code. While I was able to successfully view the home screen, I faced an issue when I tried to log in. I noticed that ChannelSecure provided a client-id, but I'm not sure if I also need to provide a client-secret. Could you please confirm if a client-secret is also required for this integration? I've attached a screenshot of the error message I received for your reference. If there's any additional information I can provide to help troubleshoot this issue, please let me know.
+
+Thank you for your time and any help you can provide. I look forward to hearing back from you.
+
+Best regards,
+[Your Name]
