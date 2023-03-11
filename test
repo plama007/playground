@@ -474,3 +474,17 @@ describe('AuthService', () => {
   });
 
 });
+
+export const authConfig: AuthConfig = {
+  issuer: 'https://<your-pingfederate-server>/as/authorization.oauth2', // The authorization server URL
+  redirectUri: window.location.origin + '/callback', // The redirect URI after successful authentication
+  clientId: '<your-client-id>', // The client ID
+  scope: 'openid profile email', // The scopes requested during authentication
+  responseType: 'code', // The response type to use (code for authorization code flow)
+  showDebugInformation: true, // Set to true to show debug information in the console
+  timeoutFactor: 0.01, // The timeout factor to use for HTTP requests
+  useSilentRefresh: true, // Set to true to use silent refresh for token renewal
+  silentRefreshRedirectUri: window.location.origin + '/silent-refresh.html', // The redirect URI for silent refresh
+  silentRefreshTimeout: 5000, // The timeout for silent refresh
+  sessionChecksEnabled: true // Set to true to enable session checks
+};
