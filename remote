@@ -1,109 +1,179 @@
-package com.wellsfargo.wmaws.config;
+import { Injectable } from '@angular/core';
+import { AuthConfig, OAuthService } from 'angular-oauth2-oidc';
+import { BehaviorSubject, Observable, throwError } from 'rxjs';
+import { catchError, filter, switchMap, tap } from 'rxjs/operators';
 
-import com.wellsfargo.cloud.tls.CacheResolver;
-import com.wellsfargo.cloud.tls.CloudKeystoreService;
-import com.wellsfargo.cloud.tls.exceptions.UnresolvableCloudFoundryServiceException;
-import com.wellsfargo.cloud.tls.keystore.CachedKeyStore;
-import com.wellsfargo.cloud.tls.keystore.KeyStoreCache;
-import com.wellsfargo.cloud.tls.keystore.resolvers.CloudVenafiCertificateCacheResolver;
-import com.wellsfargo.cloud.tls.keystore.resolvers.VenafiCertificateCacheResolver;
-import org.apache.http.client.HttpClient;
-import org.apache.http.impl.client.HttpClientBuilder;
-import org.apache.http.ssl.SSLContextBuilder;
-import org.apache.http.ssl.SSLContexts;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Primary;
-import org.springframework.core.env.Environment;
-import org.springframework.http.client.ClientHttpRequestFactory;
-import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
-import org.springframework.web.client.RestTemplate;
+/**
+ * Service for managing authentication with an OAuth2/OpenID Connect provider.
+ */
+@Injectable({
+  providedIn: 'root'
+})
+export class AuthService {
 
-import javax.annotation.PostConstruct;
-import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManagerFactory;
-import java.security.GeneralSecurityException;
+  private loggedInSubject$: BehaviorSubject<boolean>;
+  public loggedIn$: Observable<boolean>;
 
-@Configuration
-public class VenafiConfig {
-    private static final Logger LOG = LoggerFactory.getLogger(VenafiConfig.class);
-    public static final int MAXIMUM_CONNECTION_PER_ROUTE = 500;
-    public static final int MAXIMUM_TOTAL_ACTIVE_CONNECTION = 1000;
+  /**
+   * Creates an instance of AuthService.
+   *
+   * @param oauthService The OAuthService instance to use for authentication.
+   */
+  constructor(private oauthService: OAuthService) {
+    this.loggedInSubject$ = new BehaviorSubject<boolean>(this.oauthService.hasValidAccessToken());
+    this.loggedIn$ = this.loggedInSubject$.asObservable();
+  }
 
-    private final Environment environment;
-    private final CloudKeystoreService keystoreService;
+  /**
+   * Configures the OAuthService instance with the given AuthConfig and logs the user in.
+   *
+   * @param authConfig The AuthConfig object to use for configuration.
+   */
+  public configure(authConfig: AuthConfig) {
+    this.oauthService.configure(authConfig);
+    this.oauthService.loadDiscoveryDocumentAndTryLogin().then(() => {
+      if (this.oauthService.hasValidAccessToken()) {
+        this.loggedInSubject$.next(true);
+      }
+      else {
+        this.login();
+      }
+    });
+  }
 
-    @Autowired
-    public VenafiConfig(Environment environment, CloudKeystoreService keystoreService) {
-        this.environment = environment;
-        this.keystoreService = keystoreService;
-    }
+  /**
+   * Initiates the login flow with the OAuth2/OpenID Connect provider.
+   */
+  public login() {
+    this.oauthService.initLoginFlow();
+  }
 
-    @Bean
-    public CachedKeyStore cachedKeyStore() {
-        CachedKeyStore cachedKeyStore;
-        try {
-            CloudKeystoreService service = getLoadedKeystoreService(new CloudVenafiCertificateCacheResolver());
-            cachedKeyStore = service.cache().get("default");
-        } catch (UnresolvableCloudFoundryServiceException e) {
-            LOG.error(e.getLocalizedMessage(), "Unable to set default keystore");
-            VenafiCertificateCacheResolver resolver = new VenafiCertificateCacheResolver(
-                    "CA03427_VENAFI_T_ELV",
-                    "vtest@3427WMAWS7243");
-            resolver.addCertificate("local", environment.getProperty("venafi-certificates.path"));
-            cachedKeyStore = getLoadedKeystoreService(resolver).cache().get("local");
-        }
-        return cachedKeyStore;
-    }
+  /**
+   * Logs the user out of the application and revokes their access token.
+   */
+  public logout() {
+    this.oauthService.logOut();
+    this.loggedInSubject$.next(false);
+  }
 
-    @PostConstruct
-    public SSLContext getSSLContext() throws GeneralSecurityException {
-        CachedKeyStore cachedKeyStore = cachedKeyStore();
+  /**
+   * Returns an Observable that emits the access token for the logged-in user.
+   *
+   * @returns An Observable that emits the access token for the logged-in user.
+   */
+  public getAccessToken(): Observable<string> {
+    return this.loggedIn$.pipe(
+      filter(loggedIn => loggedIn),
+      switchMap(() => this.oauthService.getAccessToken()),
+      catchError(error => throwError(error))
+    );
+  }
 
-        final SSLContextBuilder sslContextBuilder = SSLContexts.custom();
-        SSLContext sslContext;
-        sslContextBuilder.loadKeyMaterial(cachedKeyStore.keystore(), cachedKeyStore.getPassword().toCharArray());
-        sslContext = sslContextBuilder.build();
-        return sslContext;
-    }
+  /**
+   * Returns an Observable that emits the ID token for the logged-in user.
+   *
+   * @returns An Observable that emits the ID token for the logged-in user.
+   */
+  public getIdToken(): Observable<string> {
+    return this.loggedIn$.pipe(
+      filter(loggedIn => loggedIn),
+      switchMap(() => this.oauthService.getIdToken()),
+      catchError(error => throwError(error))
+    );
+  }
 
-    @Bean
-    @Primary
-    public RestTemplate restTemplate() throws GeneralSecurityException {
-        // setting up the http client with the new ssl Context.
-        HttpClient httpClient = HttpClientBuilder.create()
-                .setSSLContext(getSSLContext())
-                .setMaxConnPerRoute(MAXIMUM_CONNECTION_PER_ROUTE)
-                .setMaxConnTotal(MAXIMUM_TOTAL_ACTIVE_CONNECTION)
-                .build();
-        ClientHttpRequestFactory requestFactory = new HttpComponentsClientHttpRequestFactory(httpClient);
-        return new RestTemplate(request
-private CloudKeystoreService getLoadedKeystoreService(CacheResolver<KeyStoreCache> resolver) {
-    CloudKeystoreService keystoreService = new CloudKeystoreService();
-    keystoreService.addCacheResolver(resolver);
-    keystoreService.loadCache();
-    return keystoreService;
-}
+  /**
+   * Returns an Observable that emits the expiration time for the access token of the logged-in user.
+   *
+   * @returns An Observable that emits the expiration time for the access token of the logged-in user.
+   */
+  public getAccessTokenExpiration(): Observable<number> {
+    return this.loggedIn$.pipe(
+      filter(loggedIn => loggedIn),
+      switchMap(() => this.oauthService.getAccessTokenExpiration()),
+      catchError(error => throwError(error))
+    );
+  }
 
-@Bean
-public KeyManagerFactory keyManagerFactory() throws GeneralSecurityException {
-    KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-    keyManagerFactory.init(cachedKeyStore().keystore(), cachedKeyStore().getPassword().toCharArray());
-    return keyManagerFactory;
-}
+  /**
+   * Returns an Observable that refreshes the access token for the logged-in user.
+   *
+   * @returns An Observable that refreshes the access token for the logged-in user.
+   */
+  public refreshToken(): Observable<void> {
+    return this.loggedIn$.pipe(
+      filter(loggedIn => loggedIn),
+      switchMap(() => this.oauthService.refreshToken()),
+      tap(() => this.loggedInSubject$.next(true)),
+      catchError(error => {
+        this.loggedInSubject$.next(false);
+        return throwError(error);
+      })
+    );
+  }
 
-@Bean
-public TrustManagerFactory trustManagerFactory() throws GeneralSecurityException {
-    TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-    trustManagerFactory.init(cachedKeyStore().keystore());
-    return trustManagerFactory;
-}
+  /**
+   * Returns a boolean indicating whether the logged-in user has a valid access token.
+   *
+   * @returns A boolean indicating whether
+  /**
+   * Returns a boolean indicating whether the logged-in user has a valid access token.
+   *
+   * @returns A boolean indicating whether the logged-in user has a valid access token.
+   */
+  public hasValidAccessToken(): boolean {
+    return this.oauthService.hasValidAccessToken();
+  }
 
-@Bean
-public HttpComponentsClientHttpRequestFactory httpComponentsClientHttpRequestFactory() {
-    return new HttpComponentsClientHttpRequestFactory();
+  /**
+   * Returns the identity claims for the logged-in user.
+   *
+   * @returns The identity claims for the logged-in user.
+   */
+  public getIdentityClaims(): any {
+    return this.oauthService.getIdentityClaims();
+  }
+
+  /**
+   * Returns the first name of the logged-in user.
+   *
+   * @returns The first name of the logged-in user.
+   */
+  public getFirstName(): string {
+    const identityClaims = this.oauthService.getIdentityClaims();
+    return identityClaims ? identityClaims['given_name'] : null;
+  }
+
+  /**
+   * Returns the last name of the logged-in user.
+   *
+   * @returns The last name of the logged-in user.
+   */
+  public getLastName(): string {
+    const identityClaims = this.oauthService.getIdentityClaims();
+    return identityClaims ? identityClaims['family_name'] : null;
+  }
+
+  /**
+   * Returns the user ID of the logged-in user.
+   *
+   * @returns The user ID of the logged-in user.
+   */
+  public getUserId(): string {
+    const identityClaims = this.oauthService.getIdentityClaims();
+    return identityClaims ? identityClaims['sub'] : null;
+  }
+
+  /**
+   * Returns the full name of the logged-in user.
+   *
+   * @returns The full name of the logged-in user.
+   */
+  public getFullName(): string {
+    const identityClaims = this.oauthService.getIdentityClaims();
+    const givenName = identityClaims ? identityClaims['given_name'] : '';
+    const familyName = identityClaims ? identityClaims['family_name'] : '';
+    return givenName + ' ' + familyName;
+  }
+
 }
