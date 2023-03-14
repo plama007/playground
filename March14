@@ -183,3 +183,41 @@ export class AuthService implements OnDestroy {
     return identityClaims ? identityClaims[claimKey] : null;
   }
 }
+
+import { AuthConfig } from 'angular-oauth2-oidc';
+
+// Configure the AuthConfig object with your OAuth2/OpenID Connect provider's details
+const authConfig: AuthConfig = {
+  issuer: 'https://your-auth-server.com',
+  clientId: 'your-client-id',
+  redirectUri: window.location.origin + '/callback',
+  responseType: 'code',
+  scope: 'openid profile email',
+};
+
+@NgModule({
+  declarations: [AppComponent],
+  imports: [BrowserModule, HttpClientModule, OAuthModule.forRoot()],
+  providers: [AuthService],
+  bootstrap: [AppComponent]
+})
+export class AppModule {
+  constructor(private authService: AuthService) {
+    this.authService.configure(authConfig);
+  }
+}
+
+import { Component } from '@angular/core';
+import { AuthService } from './auth.service';
+
+@Component({
+  selector: 'app-root',
+  templateUrl: './app.component.html',
+  styleUrls: ['./app.component.scss']
+})
+export class AppComponent {
+  constructor(private authService: AuthService) {
+    this.authService.login();
+  }
+}
+
