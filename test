@@ -1,175 +1,192 @@
-import { Injectable } from '@angular/core';
-import { AuthConfig, OAuthService } from 'angular-oauth2-oidc';
-import { BehaviorSubject, Observable, throwError } from 'rxjs';
-import { catchError, filter, switchMap, tap } from 'rxjs/operators';
+import { Injectable, OnDestroy } from '@angular/core';
+import { AuthConfig, OAuthService, TokenResponse } from 'angular-oauth2-oidc';
+import { BehaviorSubject, Observable, of, throwError, Subject } from 'rxjs';
+import { catchError, filter, switchMap, takeUntil, tap } from 'rxjs/operators';
+
+interface IdentityClaims {
+  sub: string;
+  given_name: string;
+  family_name: string;
+  // Add more claims as needed
+}
 
 /**
- * Service for managing authentication with an OAuth2/OpenID Connect provider.
+ * AuthService handles authentication using OAuth2.
  */
 @Injectable({
   providedIn: 'root'
 })
-export class AuthService {
-
+export class AuthService implements OnDestroy {
   private loggedInSubject$: BehaviorSubject<boolean>;
-  public loggedIn$: Observable<boolean>;
+  private loggedIn$: Observable<boolean>;
+  private destroy$: Subject<void> = new Subject<void>();
 
-  /**
-   * Creates an instance of AuthService.
-   *
-   * @param oauthService The OAuthService instance to use for authentication.
-   */
   constructor(private oauthService: OAuthService) {
     this.loggedInSubject$ = new BehaviorSubject<boolean>(this.oauthService.hasValidAccessToken());
-    this.loggedIn$ = this.loggedInSubject$.asObservable();
+    this.loggedIn$ = this.loggedInSubject$.asObservable().pipe(takeUntil(this.destroy$));
   }
 
   /**
-   * Configures the OAuthService instance with the given AuthConfig.
-   *
-   * @param authConfig The AuthConfig object to use for configuration.
+   * Clean up when the service is destroyed.
+   */
+  ngOnDestroy() {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
+
+  /**
+   * Configures OAuthService with the given authConfig and tries to log in.
+   * @param {AuthConfig} authConfig - The authentication configuration.
    */
   public configure(authConfig: AuthConfig) {
     this.oauthService.configure(authConfig);
     this.oauthService.loadDiscoveryDocumentAndTryLogin().then(() => {
       if (this.oauthService.hasValidAccessToken()) {
-        this.loggedInSubject$.next(true);
+        this.setLoggedIn(true);
       }
     });
   }
 
   /**
-   * Initiates the login flow with the OAuth2/OpenID Connect provider.
+   * Initiates the login process.
    */
   public login() {
     this.oauthService.initLoginFlow();
   }
 
   /**
-   * Logs the user out of the application and revokes their access token.
+   * Logs out the user.
    */
   public logout() {
     this.oauthService.logOut();
-    this.loggedInSubject$.next(false);
+    this.setLoggedIn(false);
   }
 
   /**
-   * Returns an Observable that emits the access token for the logged-in user.
-   *
-   * @returns An Observable that emits the access token for the logged-in user.
+   * Returns an Observable of the access token.
+   * @returns {Observable<string>} An Observable of the access token.
    */
   public getAccessToken(): Observable<string> {
     return this.loggedIn$.pipe(
       filter(loggedIn => loggedIn),
-      switchMap(() => this.oauthService.getAccessToken()),
-      catchError(error => throwError(error))
+      switchMap(() => of(this.oauthService.getAccessToken())),
+      catchError(error => this.handleError(error))
     );
   }
 
   /**
-   * Returns an Observable that emits the ID token for the logged-in user.
-   *
-   * @returns An Observable that emits the ID token for the logged-in user.
+   * Returns an Observable of the ID token.
+   * @returns {Observable<string>} An Observable of the ID token.
    */
   public getIdToken(): Observable<string> {
     return this.loggedIn$.pipe(
       filter(loggedIn => loggedIn),
-      switchMap(() => this.oauthService.getIdToken()),
-      catchError(error => throwError(error))
+      switchMap(() => of(this.oauthService.getIdToken())),
+      catchError(error => this.handleError(error))
     );
   }
 
   /**
-   * Returns an Observable that emits the expiration time for the access token of the logged-in user.
-   *
-   * @returns An Observable that emits the expiration time for the access token of the logged-in user.
+   * Returns an Observable of the access token expiration time.
+   * @returns {Observable<number>} An Observable of the access token expiration time.
    */
   public getAccessTokenExpiration(): Observable<number> {
     return this.loggedIn$.pipe(
       filter(loggedIn => loggedIn),
-      switchMap(() => this.oauthService.getAccessTokenExpiration()),
-      catchError(error => throwError(error))
+      switchMap(() => of(this.oauthService.getAccessTokenExpiration())),
+      catchError(error => this.handleError(error))
     );
   }
 
   /**
-   * Returns an Observable that refreshes the access token for the logged-in user.
-   *
-   * @returns An Observable that refreshes the access token for the logged-in user.
+   * Refreshes the access token.
+   * @returns {Observable<TokenResponse>} An Observable that emits a TokenResponse when the token has been refreshed.
    */
-  public refreshToken(): Observable<void> {
+  public refreshToken(): Observable<TokenResponse> {
     return this.loggedIn$.pipe(
       filter(loggedIn => loggedIn),
       switchMap(() => this.oauthService.refreshToken()),
-      tap(() => this.loggedInSubject$.next(true)),
+      tap(() => this.setLoggedIn(true)),
       catchError(error => {
-        this.loggedInSubject$.next(false);
-        return throwError(error);
+        this.setLoggedIn(false);
+        return this.handleError(error);
       })
     );
   }
 
   /**
-   * Returns a boolean indicating whether the logged-in user has a valid access token.
-   *
-   * @returns A boolean indicating whether the logged-in user has a valid access token.
-   */
+   * Checks if the user has a valid access token.
+   * @returns {boolean} True if the user has a valid
   public hasValidAccessToken(): boolean {
     return this.oauthService.hasValidAccessToken();
   }
 
   /**
-   * Returns the identity claims for the logged-in user.
-   *
-   * @returns The identity claims for the logged-in user.
-   */
-  public getIdentityClaims(): any {
-    return this.oauthService.getIdentityClaims();
-  }
-
-  /**
-   * Returns the first name of the logged-in user.
-   *
-   * @returns The first name of the logged-in user.
+   * Returns the user's first name.
+   * @returns {string} The user's first name.
    */
   public getFirstName(): string {
-    const identityClaims = this.oauthService.getIdentityClaims();
-    return identityClaims ? identityClaims['given_name'] : null;
+    return this.getClaimValue('given_name');
   }
-
+  
   /**
-   * Returns the last name of the logged-in user.
-   *
-   * @returns The last name of the logged-in user.
+   * Returns the user's last name.
+   * @returns {string} The user's last name.
    */
   public getLastName(): string {
-    const identityClaims = this.oauthService.getIdentityClaims();
-    return identityClaims ? identityClaims['family_name'] : null;
+    return this.getClaimValue('family_name');
   }
 
   /**
-   * Returns the user ID of the logged-in user.
-   *
-   * @returns The user ID of the logged-in user.
+   * Returns the user's ID.
+   * @returns {string} The user's ID.
    */
   public getUserId(): string {
-    const identityClaims = this.oauthService.getIdentityClaims();
-    return identityClaims ? identityClaims['sub'] : null;
+    return this.getClaimValue('sub');
   }
 
   /**
-   * Returns the full name of the logged-in user.
-   *
-   * @returns The full name of the logged-in user.
+   * Returns the user's full name.
+   * @returns {string} The user's full name.
    */
   public getFullName(): string {
-    const identityClaims = this.oauthService.getIdentityClaims();
-    const givenName = identityClaims ? identityClaims['given_name'] : '';
-    const familyName = identityClaims ? identityClaims['family_name'] : '';
-    return givenName + ' ' + familyName;
+    return `${this.getFirstName()} ${this.getLastName()}`;
   }
 
+  private setLoggedIn(loggedIn: boolean) {
+    this.loggedInSubject$.next(loggedIn);
+  }
+
+  /**
+   * Handles errors by logging them and returning a new error Observable.
+   * @param {any} error - The error to handle.
+   * @returns {Observable<never>} An Observable that raises an error.
+   */
+  private handleError(error: any) {
+    console.error('Error in AuthService:', error);
+    // TODO: Add remote logging and more specific error handling if necessary.
+    return throwError(error);
+  }
+
+  /**
+   * Returns the identity claims for the user.
+   * @returns {IdentityClaims} The identity claims for the user.
+   */
+  private getIdentityClaims(): IdentityClaims {
+    return this.oauthService.getIdentityClaims() as IdentityClaims;
+  }
+
+  /**
+   * Returns the value of a specific claim.
+   * @param {string} claimKey - The key of the claim to retrieve.
+   * @returns {string} The value of the specified claim.
+   */
+  private getClaimValue(claimKey: string): string {
+    const identityClaims = this.getIdentityClaims();
+    return identityClaims ? identityClaims[claimKey] : null;
+  }
 }
+
 
 import { TestBed } from '@angular/core/testing';
 import { AuthConfig, OAuthService } from 'angular-oauth2-oidc';
