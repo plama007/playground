@@ -1,7 +1,11 @@
-private createObservableForValue<T>(valueGetter: () => Observable<T>): Observable<T> {
-  return this.loggedIn$.pipe(
-    filter(loggedIn => loggedIn),
-    switchMap(() => valueGetter()),
-    catchError(error => this.handleError(error))
-  );
+public refreshToken(): Observable<TokenResponse> {
+    return this.loggedIn$.pipe(
+      filter(loggedIn => loggedIn),
+      switchMap(() => this.oauthService.refreshToken()),
+      tap(() => this.setLoggedIn(true)),
+      catchError(error => {
+        this.setLoggedIn(false);
+        return this.handleError(error);
+      })
+    );
 }
