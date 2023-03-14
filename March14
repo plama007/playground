@@ -67,7 +67,11 @@ export class AuthService implements OnDestroy {
    * @returns {Observable<string>} An Observable of the access token.
    */
   public getAccessToken(): Observable<string> {
-    return this.createObservableForValue(() => this.oauthService.getAccessToken());
+    return this.loggedIn$.pipe(
+      filter(loggedIn => loggedIn),
+      switchMap(() => this.oauthService.getAccessToken()),
+      catchError(error => this.handleError(error))
+    );
   }
 
   /**
@@ -75,7 +79,11 @@ export class AuthService implements OnDestroy {
    * @returns {Observable<string>} An Observable of the ID token.
    */
   public getIdToken(): Observable<string> {
-    return this.createObservableForValue(() => this.oauthService.getIdToken());
+    return this.loggedIn$.pipe(
+      filter(loggedIn => loggedIn),
+      switchMap(() => this.oauthService.getIdToken()),
+      catchError(error => this.handleError(error))
+    );
   }
 
   /**
@@ -83,7 +91,11 @@ export class AuthService implements OnDestroy {
    * @returns {Observable<number>} An Observable of the access token expiration time.
    */
   public getAccessTokenExpiration(): Observable<number> {
-    return this.createObservableForValue(() => this.oauthService.getAccessTokenExpiration());
+    return this.loggedIn$.pipe(
+      filter(loggedIn => loggedIn),
+      switchMap(() => this.oauthService.getAccessTokenExpiration()),
+      catchError(error => this.handleError(error))
+    );
   }
 
   /**
@@ -146,14 +158,6 @@ export class AuthService implements OnDestroy {
     this.loggedInSubject$.next(loggedIn);
   }
 
-  private createObservableForValue<T>(valueGetter: () => T): Observable<T> {
-    return this.loggedIn$.pipe(
-      filter(loggedIn => loggedIn),
-      switchMap(() => valueGetter()),
-      catchError(error => this.handleError(error))
-    );
-  }
-
   /**
    * Handles errors by logging them and returning a new error Observable.
    * @param {any} error - The error to handle.
@@ -183,6 +187,7 @@ export class AuthService implements OnDestroy {
     return identityClaims ? identityClaims[claimKey] : null;
   }
 }
+
 
 import { AuthConfig } from 'angular-oauth2-oidc';
 
